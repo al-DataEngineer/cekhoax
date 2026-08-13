@@ -8,6 +8,11 @@ export interface InsightTren {
 }
 
 const TTL_JAM = 24;
+const TTL_FALLBACK_MS = 10 * 60_000;
+
+declare global {
+  var cekhoaxInsightCache: { data: InsightTren; waktu: number } | undefined;
+}
 
 interface StatistikTren {
   total: number;
@@ -36,8 +41,18 @@ async function bacaCache(): Promise<InsightTren | null> {
     if (umurJam >= TTL_JAM) return null;
     return { ...row.isi, dibuat_at: row.dibuat_at };
   } catch {
-    return null; // tabel insight belum dibuat
+    // tabel insight belum dibuat — lanjut ke cache memori
   }
+
+  const c = globalThis.cekhoaxInsightCache;
+  if (!c) return null;
+  const ttl = c.data.sumber === "ai" ? TTL_JAM * 3_600_000 : TTL_FALLBACK_MS;
+  if (Date.now() - c.waktu >= ttl) return null;
+  return c.data;
+}
+
+function simpanMemori(data: InsightTren) {
+  globalThis.cekhoaxInsightCache = { data, waktu: Date.now() };
 }
 
 async function hitungStatistik(): Promise<StatistikTren> {
@@ -148,6 +163,7 @@ export async function ambilInsightTren(): Promise<InsightTren> {
 
   if (narasi) {
     const insight: InsightTren = { ringkasan: narasi, sumber: "ai" };
+    simpanMemori(insight);
     try {
       await supabase
         .from("insight")
@@ -161,5 +177,10 @@ export async function ambilInsightTren(): Promise<InsightTren> {
     return { ...insight, dibuat_at: new Date().toISOString() };
   }
 
-  return { ringkasan: fallbackStatistik(statistik), sumber: "statistik" };
+  const insight: InsightTren = {
+    ringkasan: fallbackStatistik(statistik),
+    sumber: "statistik",
+  };
+  simpanMemori(insight);
+  return insight;
 }
