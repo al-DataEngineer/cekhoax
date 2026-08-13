@@ -59,6 +59,7 @@ async function hitungStatistik(): Promise<StatistikTren> {
   const { data } = await supabase
     .from("berita")
     .select("id, status, kategori, judul, sumber")
+    .neq("url", "konfig:analisis")
     .order("created_at", { ascending: false })
     .limit(400);
 

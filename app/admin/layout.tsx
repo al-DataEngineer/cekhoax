@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Bell,
+  BrainCircuit,
   ExternalLink,
   KeyRound,
   LayoutDashboard,
@@ -26,6 +27,7 @@ import {
 const MENU_ADMIN: Array<{ href: string; label: string; icon: typeof Bell }> = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
   { href: "/admin/usulan", label: "Usulan AI", icon: Bell },
+  { href: "/admin/analisis", label: "Analisis AI", icon: BrainCircuit },
   { href: "/admin/input", label: "Input Manual", icon: PlusCircle },
   { href: "/admin/berita", label: "Kelola Berita", icon: Newspaper },
 ];

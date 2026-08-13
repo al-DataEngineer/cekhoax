@@ -2,8 +2,9 @@ import { NextResponse } from "next/server";
 import { supabase, supabaseSiap } from "@/lib/db";
 import { ambilSemuaBeritaRss } from "@/lib/rss";
 import { analisisBerita } from "@/lib/ai";
-import { MAX_ANALISIS_PER_RUN } from "@/lib/site";
+import { MAX_ANALISIS_PER_RUN, SUMBER_BERITA } from "@/lib/site";
 import { encodeProposal } from "@/lib/proposal";
+import { URL_KONFIG, bacaKonfigAnalisis, sumberAktif } from "@/lib/konfig";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -26,6 +27,7 @@ export async function GET(request: Request) {
     dianalisis: 0,
     gagal: 0,
     sisaPending: 0,
+    autoAnalisis: true,
   };
 
   if (!supabaseSiap()) {
@@ -59,29 +61,39 @@ export async function GET(request: Request) {
     const baru = inserted ?? [];
     laporan.baru = baru.length;
 
-    let novel = baru as Array<{
+    const konfig = await bacaKonfigAnalisis();
+    const aktif = sumberAktif(konfig, SUMBER_BERITA.map((s) => s.nama));
+    laporan.autoAnalisis = konfig.auto;
+
+    let novel = (baru as Array<{
       id: string;
       judul: string;
       url: string;
       sumber: string;
       ringkasan: string | null;
-    }>;
+    }>).filter((item) => aktif.length === 0 || aktif.includes(item.sumber));
 
     const sisaSlot = Math.max(0, MAX_ANALISIS_PER_RUN - novel.length);
 
     if (sisaSlot > 0) {
-      const { data: pendingLama } = await supabase
+      let query = supabase
         .from("berita")
         .select("id, judul, url, sumber, ringkasan")
         .eq("status", "pending")
         .is("alasan", null)
+        .neq("url", URL_KONFIG)
         .order("created_at", { ascending: true })
         .limit(sisaSlot);
+      if (aktif.length) {
+        query = query.in("sumber", aktif);
+      }
+      const { data: pendingLama } = await query;
       novel = [...novel, ...((pendingLama ?? []) as typeof novel)];
     }
 
     let counter = 0;
-    for (const item of novel.slice(0, MAX_ANALISIS_PER_RUN)) {
+    const daftarAnalisis = konfig.auto ? novel.slice(0, MAX_ANALISIS_PER_RUN) : [];
+    for (const item of daftarAnalisis) {
       try {
         const hasil = await analisisBerita({
           judul: item.judul,
@@ -110,7 +122,7 @@ export async function GET(request: Request) {
         console.error("Gagal analisis:", item.url, e);
       }
       counter++;
-      if (counter < novel.slice(0, MAX_ANALISIS_PER_RUN).length) {
+      if (counter < daftarAnalisis.length) {
         await tunda(TUNDA_MS);
       }
     }
@@ -119,7 +131,8 @@ export async function GET(request: Request) {
       .from("berita")
       .select("*", { count: "exact", head: true })
       .eq("status", "pending")
-      .is("alasan", null);
+      .is("alasan", null)
+      .neq("url", URL_KONFIG);
     laporan.sisaPending = count ?? 0;
 
     return NextResponse.json(laporan);

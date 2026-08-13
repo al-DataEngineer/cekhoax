@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase, supabaseSiap } from "@/lib/db";
 import { loginValid, tolakLogin } from "@/lib/admin-auth";
+import { URL_KONFIG } from "@/lib/konfig";
 
 export const dynamic = "force-dynamic";
 
@@ -25,7 +26,8 @@ export async function GET(request: Request) {
     .from("berita")
     .select("id, judul, url, sumber, status, confidence, kategori, created_at")
     .order("created_at", { ascending: false })
-    .limit(300);
+    .limit(300)
+    .neq("url", URL_KONFIG);
 
   if (q) {
     query = query.ilike("judul", `%${q}%`);

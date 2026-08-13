@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { supabase, supabaseSiap } from "@/lib/db";
 import { decodeProposal } from "@/lib/proposal";
 import { loginValid, tolakLogin } from "@/lib/admin-auth";
+import { URL_KONFIG } from "@/lib/konfig";
 
 export const dynamic = "force-dynamic";
 
@@ -32,12 +33,13 @@ export async function GET(request: Request) {
       .from("berita")
       .select("*", { count: "exact", head: true })
       .eq("status", "mencurigakan"),
-    supabase.from("berita").select("*", { count: "exact", head: true }).eq("status", "pending"),
+    supabase.from("berita").select("*", { count: "exact", head: true }).eq("status", "pending").neq("url", URL_KONFIG),
     supabase
       .from("berita")
       .select("*", { count: "exact", head: true })
       .eq("status", "pending")
-      .not("alasan", "is", null),
+      .not("alasan", "is", null)
+      .neq("url", URL_KONFIG),
     supabase
       .from("berita")
       .select("*")
@@ -49,11 +51,12 @@ export async function GET(request: Request) {
       .select("id, judul, url, sumber, alasan, dianalisis_at, created_at")
       .eq("status", "pending")
       .not("alasan", "is", null)
+      .neq("url", URL_KONFIG)
       .order("dianalisis_at", { ascending: false })
       .limit(5),
-    supabase.from("berita").select("kategori").limit(5000),
-    supabase.from("berita").select("sumber").limit(5000),
-    supabase.from("berita").select("created_at").limit(5000),
+    supabase.from("berita").select("kategori").neq("url", URL_KONFIG).limit(5000),
+    supabase.from("berita").select("sumber").neq("url", URL_KONFIG).limit(5000),
+    supabase.from("berita").select("created_at").neq("url", URL_KONFIG).limit(5000),
   ]);
 
   if (total.error) {
