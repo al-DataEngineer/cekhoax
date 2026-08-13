@@ -5,6 +5,41 @@ export const dynamic = "force-dynamic";
 
 const STATUS_VALID = ["hoax", "fakta", "mencurigakan"];
 
+export async function GET(request: Request) {
+  const key = request.headers.get("x-admin-key");
+  if (!process.env.ADMIN_KEY || key !== process.env.ADMIN_KEY) {
+    return NextResponse.json({ error: "Kunci admin salah" }, { status: 401 });
+  }
+
+  if (!supabaseSiap()) {
+    return NextResponse.json({ error: "Supabase belum dikonfigurasi" }, { status: 500 });
+  }
+
+  const sp = new URL(request.url).searchParams;
+  const q = (sp.get("q") ?? "").trim();
+
+  let query = supabase
+    .from("berita")
+    .select("id, judul, url, sumber, status, confidence, kategori, created_at")
+    .order("created_at", { ascending: false })
+    .limit(300);
+
+  if (q) {
+    query = query.ilike("judul", `%${q}%`);
+  }
+
+  const status = (sp.get("status") ?? "").trim();
+  if (["hoax", "fakta", "mencurigakan", "pending"].includes(status)) {
+    query = query.eq("status", status);
+  }
+
+  const { data, error } = await query;
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+  return NextResponse.json({ berita: data ?? [] });
+}
+
 export async function POST(request: Request) {
   const key = request.headers.get("x-admin-key");
   if (!process.env.ADMIN_KEY || key !== process.env.ADMIN_KEY) {

@@ -8,7 +8,6 @@ import { cn } from "@/lib/utils";
 const LINK_NAV = [
   { href: "/", label: "Beranda" },
   { href: "/cek", label: "Cek Berita" },
-  { href: "/admin", label: "Admin" },
 ];
 
 export default function Navbar() {
