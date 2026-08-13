@@ -6,32 +6,47 @@ import { AnimatePresence, motion } from "motion/react";
 import {
   AlertTriangle,
   ArrowRight,
+  BarChart3,
   CheckCircle2,
+  Clock,
   FlaskConical,
+  Layers,
   Loader2,
   Newspaper,
   RefreshCw,
   ShieldX,
+  Tag,
   XCircle,
 } from "lucide-react";
 import InsightCard from "@/components/InsightCard";
+import NewsCard from "@/components/NewsCard";
 import { ambilKunciAdmin, hapusKunciAdmin, headerAdmin } from "@/lib/admin-key";
 import type { InsightTren } from "@/lib/insight";
 import type { ProposalAi } from "@/lib/proposal";
-import { formatWaktuRelatif } from "@/lib/utils";
+import type { Berita } from "@/lib/types";
 
 const KARTU_STAT = [
   { kunci: "total" as const, label: "Total Berita", icon: Newspaper, warna: "from-sky-400 to-blue-600" },
+  { kunci: "usulan" as const, label: "Usulan Menunggu", icon: FlaskConical, warna: "from-violet-400 to-purple-600" },
   { kunci: "hoax" as const, label: "Hoax", icon: ShieldX, warna: "from-rose-400 to-rose-600" },
   { kunci: "fakta" as const, label: "Fakta", icon: CheckCircle2, warna: "from-emerald-400 to-emerald-600" },
   { kunci: "mencurigakan" as const, label: "Mencurigakan", icon: AlertTriangle, warna: "from-amber-400 to-orange-500" },
-  { kunci: "usulan" as const, label: "Usulan Menunggu", icon: FlaskConical, warna: "from-violet-400 to-purple-600" },
+  { kunci: "pending" as const, label: "Pending / Belum Analisis", icon: Clock, warna: "from-slate-400 to-slate-600" },
 ];
 
 const WARNA_USULAN: Record<string, string> = {
   hoax: "bg-rose-100 text-rose-700",
   fakta: "bg-emerald-100 text-emerald-700",
   mencurigakan: "bg-amber-100 text-amber-700",
+};
+
+const WARNA_ITEM: Record<number, string> = {
+  0: "bg-rose-400",
+  1: "bg-orange-400",
+  2: "bg-amber-400",
+  3: "bg-sky-400",
+  4: "bg-violet-400",
+  5: "bg-emerald-400",
 };
 
 interface StatDashboard {
@@ -43,16 +58,10 @@ interface StatDashboard {
     pending: number;
     usulan: number;
   };
-  terbaru: Array<{
-    id: string;
-    judul: string;
-    url: string;
-    sumber: string;
-    status: string;
-    confidence: number | null;
-    kategori: string | null;
-    created_at: string;
-  }>;
+  kategori: Array<{ nama: string; jumlah: number }>;
+  sumber: Array<{ nama: string; jumlah: number }>;
+  aktivitas: { labels: string[]; jumlah: number[] };
+  terbaru: Berita[];
   usulan: Array<{
     id: string;
     judul: string;
@@ -184,7 +193,7 @@ export default function DashboardAdmin() {
         </button>
       </header>
 
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-5">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-6">
         {KARTU_STAT.map((kartu) => {
           const Icon = kartu.icon;
           return (
@@ -206,9 +215,102 @@ export default function DashboardAdmin() {
         })}
       </div>
 
+      <section>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="flex items-center gap-2 text-lg font-bold text-slate-800">
+            <Newspaper className="h-4 w-4 text-sky-500" />
+            Berita terverifikasi terbaru
+          </h2>
+          <Link
+            href="/admin/berita"
+            className="inline-flex items-center gap-1 text-xs font-semibold text-sky-600 hover:text-sky-700"
+          >
+            Kelola semua <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+        </div>
+        {data.terbaru.length === 0 ? (
+          <p className="text-sm text-slate-500">Belum ada berita terverifikasi.</p>
+        ) : (
+          <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {data.terbaru.map((b) => (
+              <NewsCard key={b.id} berita={b} />
+            ))}
+          </ul>
+        )}
+      </section>
+
       <InsightCard insight={insight ?? { ringkasan: [] }} />
 
       <div className="grid gap-6 xl:grid-cols-2">
+        <section className="rounded-3xl border border-sky-100 bg-white/80 p-5 shadow-sm">
+          <h2 className="flex items-center gap-2 font-bold text-slate-800">
+            <BarChart3 className="h-4 w-4 text-sky-500" />
+            Aktivitas 7 hari terakhir
+          </h2>
+          <div className="mt-4 flex h-44 items-end gap-2">
+            {data.aktivitas.labels.map((label, i) => {
+              const maks = Math.max(...data.aktivitas.jumlah, 1);
+              const tinggi = Math.round((data.aktivitas.jumlah[i] / maks) * 100);
+              return (
+                <div key={i} className="flex h-full flex-1 flex-col items-center gap-1.5">
+                  <span className="text-[11px] font-bold text-slate-500">
+                    {data.aktivitas.jumlah[i]}
+                  </span>
+                  <div className="flex w-full flex-1 items-end">
+                    <div
+                      className="w-full rounded-t-lg bg-gradient-to-t from-sky-500 to-blue-400"
+                      style={{ height: `${Math.max(tinggi, 4)}%` }}
+                    />
+                  </div>
+                  <span className="text-[11px] text-slate-400">{label}</span>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+
+        <section className="grid gap-6 sm:grid-cols-2">
+          {[
+            { judul: "Per kategori", data: data.kategori, icon: Tag },
+            { judul: "Per sumber", data: data.sumber, icon: Layers },
+          ].map((grup) => {
+            const Icon = grup.icon;
+            const maks = Math.max(...grup.data.map((d) => d.jumlah), 1);
+            return (
+              <div
+                key={grup.judul}
+                className="rounded-3xl border border-sky-100 bg-white/80 p-5 shadow-sm"
+              >
+                <h3 className="flex items-center gap-2 text-sm font-bold text-slate-800">
+                  <Icon className="h-4 w-4 text-sky-500" />
+                  {grup.judul}
+                </h3>
+                <ul className="mt-3 space-y-2.5">
+                  {grup.data.length === 0 && (
+                    <li className="text-xs text-slate-400">Belum ada data.</li>
+                  )}
+                  {grup.data.map((d, i) => (
+                    <li key={d.nama}>
+                      <div className="flex items-center justify-between gap-2 text-xs">
+                        <span className="truncate font-medium text-slate-600">{d.nama}</span>
+                        <span className="font-bold text-slate-800">{d.jumlah}</span>
+                      </div>
+                      <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-sky-50">
+                        <div
+                          className={`h-full rounded-full ${WARNA_ITEM[i % 6] ?? "bg-sky-400"}`}
+                          style={{ width: `${Math.max((d.jumlah / maks) * 100, 3)}%` }}
+                        />
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            );
+          })}
+        </section>
+      </div>
+
+      <div className="space-y-6">
         <section className="rounded-3xl border border-amber-200 bg-amber-50/70 p-5">
           <div className="flex items-center justify-between">
             <h2 className="flex items-center gap-2 font-bold text-slate-800">
@@ -266,40 +368,6 @@ export default function DashboardAdmin() {
                       Tolak
                     </button>
                   </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-
-        <section className="rounded-3xl border border-sky-100 bg-white/80 p-5 shadow-sm">
-          <div className="flex items-center justify-between">
-            <h2 className="font-bold text-slate-800">Berita terverifikasi terbaru</h2>
-            <Link
-              href="/admin/berita"
-              className="inline-flex items-center gap-1 text-xs font-semibold text-sky-600 hover:text-sky-700"
-            >
-              Kelola semua <ArrowRight className="h-3.5 w-3.5" />
-            </Link>
-          </div>
-          {data.terbaru.length === 0 ? (
-            <p className="mt-3 text-sm text-slate-500">Belum ada berita terverifikasi.</p>
-          ) : (
-            <ul className="mt-3 divide-y divide-sky-50">
-              {data.terbaru.map((b) => (
-                <li key={b.id} className="py-2.5">
-                  <a
-                    href={b.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="line-clamp-2 text-sm font-medium text-slate-800 hover:text-sky-600"
-                  >
-                    {b.judul}
-                  </a>
-                  <p className="mt-0.5 text-xs text-slate-400">
-                    <span className="font-semibold text-slate-500">{b.sumber}</span> ·{" "}
-                    {formatWaktuRelatif(b.created_at)}
-                  </p>
                 </li>
               ))}
             </ul>
