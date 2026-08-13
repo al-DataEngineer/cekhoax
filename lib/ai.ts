@@ -1,7 +1,29 @@
 import type { HasilAi } from "./types";
 
-const BASE_URL = process.env.AI_BASE_URL ?? "https://api.deepseek.com";
-const MODEL = process.env.AI_MODEL ?? "deepseek-v4-flash";
+export interface ProviderAi {
+  apiKey?: string;
+  baseUrl?: string;
+  model?: string;
+}
+
+/** Daftar provider AI dengan urutan prioritas (gagal 429/distim → coba berikutnya) */
+const DAFTAR_PROVIDER: ProviderAi[] = [
+  {
+    apiKey: process.env.AI_API_KEY,
+    baseUrl: process.env.AI_BASE_URL ?? "https://opencode.ai/zen/v1",
+    model: process.env.AI_MODEL ?? "deepseek-v4-flash-free",
+  },
+  {
+    apiKey: process.env.AI_API_KEY_2,
+    baseUrl: process.env.AI_BASE_URL_2 ?? "https://openrouter.ai/api/v1",
+    model: process.env.AI_MODEL_2 ?? "deepseek/deepseek-v4-flash:free",
+  },
+  {
+    apiKey: process.env.AI_API_KEY_3,
+    baseUrl: process.env.AI_BASE_URL_3 ?? "https://api.groq.com/openai/v1",
+    model: process.env.AI_MODEL_3 ?? "llama-3.3-70b-versatile",
+  },
+];
 
 export interface PesanAi {
   role: "system" | "user" | "assistant";
@@ -24,7 +46,7 @@ Balas HANYA dengan JSON (tanpa teks lain) dengan format:
 Jangan menebak tanpa dasar; jika informasi kurang, gunakan "mencurigakan" dengan confidence rendah.`;
 
 export function aiSiap(): boolean {
-  return Boolean(process.env.AI_API_KEY);
+  return DAFTAR_PROVIDER.some((p) => Boolean(p.apiKey && p.model));
 }
 
 /** Deteksi error kuota/rate-limit dari pesan error AI */
@@ -36,36 +58,47 @@ export async function panggilPesanAi(
   messages: PesanAi[],
   opts: { maxTokens?: number; json?: boolean; temperature?: number } = {}
 ): Promise<string> {
-  const apiKey = process.env.AI_API_KEY;
-  if (!apiKey) throw new Error("AI_API_KEY belum diatur");
+  const providerAktif = DAFTAR_PROVIDER.filter((p) => Boolean(p.apiKey && p.model));
+  if (!providerAktif.length) throw new Error("AI_API_KEY belum diatur");
 
-  const res = await fetch(`${BASE_URL}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: MODEL,
-      temperature: opts.temperature ?? 0.3,
-      max_tokens: opts.maxTokens ?? 700,
-      ...(opts.json ? { response_format: { type: "json_object" } } : {}),
-      messages,
-    }),
-    signal: AbortSignal.timeout(45_000),
-  });
+  let errorTerakhir: Error | null = null;
+  for (const p of providerAktif) {
+    try {
+      const res = await fetch(`${p.baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(p.apiKey ? { Authorization: `Bearer ${p.apiKey}` } : {}),
+        },
+        body: JSON.stringify({
+          model: p.model,
+          temperature: opts.temperature ?? 0.3,
+          max_tokens: opts.maxTokens ?? 700,
+          ...(opts.json ? { response_format: { type: "json_object" } } : {}),
+          messages,
+        }),
+        signal: AbortSignal.timeout(45_000),
+      });
 
-  if (!res.ok) {
-    const teks = (await res.text()).slice(0, 200);
-    throw new Error(`AI error ${res.status}: ${teks}`);
+      if (!res.ok) {
+        const teks = (await res.text()).slice(0, 200);
+        throw new Error(`AI error ${res.status}: ${teks}`);
+      }
+
+      const data = (await res.json()) as {
+        choices?: Array<{ message?: { content?: string } }>;
+      };
+      const konten = data.choices?.[0]?.message?.content;
+      if (!konten) throw new Error("AI tidak mengembalikan konten");
+      return konten;
+    } catch (e) {
+      errorTerakhir = e instanceof Error ? e : new Error(String(e));
+      if (!apakahKuotaHabis(errorTerakhir.message)) break;
+      console.warn(`Provider ${p.baseUrl} gagal, coba provider berikutnya:`, errorTerakhir.message);
+    }
   }
 
-  const data = (await res.json()) as {
-    choices?: Array<{ message?: { content?: string } }>;
-  };
-  const konten = data.choices?.[0]?.message?.content;
-  if (!konten) throw new Error("AI tidak mengembalikan konten");
-  return konten;
+  throw errorTerakhir ?? new Error("Semua provider AI gagal");
 }
 
 function ekstrakJson(teks: string): unknown {

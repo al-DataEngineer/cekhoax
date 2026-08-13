@@ -25,8 +25,9 @@ npm run dev
 2. Di SQL Editor, jalankan isi `supabase/schema.sql`.
 3. API key AI:
    - **Gratis (OpenCode Zen)**: key dari [workspace kamu](https://opencode.ai/zen/keys). Model `deepseek-v4-flash-free` ($0, kuota harian terbatas — kalau 429, tunggu reset; cron retry otomatis).
+   - **Cadangan gratis (OpenRouter)**: [openrouter.ai](https://openrouter.ai) → Keys, `AI_API_KEY_2` + model `deepseek/deepseek-v4-flash:free` (1000 req/hari). Otomatis dipakai saat provider utama 429.
+   - **Cadangan gratis (Groq)**: [console.groq.com](https://console.groq.com) → API Keys, `AI_API_KEY_3` + model `llama-3.3-70b-versatile`.
    - **DeepSeek** (murah): [platform.deepseek.com](https://platform.deepseek.com) → API Keys. Model `deepseek-v4-flash` (~$0.14/1jt token input, cukup untuk puluhan ribu berita).
-   - **OpenRouter gratis**: [openrouter.ai](https://openrouter.ai) → Keys, model `deepseek/deepseek-v4-flash:free` (1000 req/hari).
 4. Isi `.env.local` (lihat `.env.local.example`).
 
 ## Alur otomatis
