@@ -104,7 +104,7 @@ export default function AnalisisAiPage() {
           "Content-Type": "application/json",
           ...headerAdmin(),
         },
-        body: simpan || jalankan ? JSON.stringify(body) : undefined,
+        body: simpan || jalankan ? JSON.stringify({ jalankan: Boolean(jalankan), ...(body as object) }) : undefined,
       });
       const j = (await res.json()) as ResponAnalisis & {
         error?: string;
