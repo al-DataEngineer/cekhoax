@@ -1,19 +1,22 @@
 import { NextResponse } from "next/server";
 import { supabase, supabaseSiap } from "@/lib/db";
+import { loginValid, tolakLogin } from "@/lib/admin-auth";
 
 export const dynamic = "force-dynamic";
 
 const STATUS_VALID = ["hoax", "fakta", "mencurigakan"];
 
-export async function GET(request: Request) {
-  const key = request.headers.get("x-admin-key");
-  if (!process.env.ADMIN_KEY || key !== process.env.ADMIN_KEY) {
-    return NextResponse.json({ error: "Kunci admin salah" }, { status: 401 });
-  }
-
+function cekAuth(request: Request) {
+  if (!loginValid(request.headers)) return tolakLogin();
   if (!supabaseSiap()) {
     return NextResponse.json({ error: "Supabase belum dikonfigurasi" }, { status: 500 });
   }
+  return null;
+}
+
+export async function GET(request: Request) {
+  const gagalAuth = cekAuth(request);
+  if (gagalAuth) return gagalAuth;
 
   const sp = new URL(request.url).searchParams;
   const q = (sp.get("q") ?? "").trim();
@@ -41,14 +44,8 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const key = request.headers.get("x-admin-key");
-  if (!process.env.ADMIN_KEY || key !== process.env.ADMIN_KEY) {
-    return NextResponse.json({ error: "Kunci admin salah" }, { status: 401 });
-  }
-
-  if (!supabaseSiap()) {
-    return NextResponse.json({ error: "Supabase belum dikonfigurasi" }, { status: 500 });
-  }
+  const gagalAuth = cekAuth(request);
+  if (gagalAuth) return gagalAuth;
 
   const body = (await request.json().catch(() => ({}))) as {
     judul?: string;

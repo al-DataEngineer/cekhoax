@@ -1,14 +1,12 @@
 import { NextResponse } from "next/server";
 import { supabase, supabaseSiap } from "@/lib/db";
 import { decodeProposal, encodeAlasanFinal } from "@/lib/proposal";
+import { loginValid, tolakLogin } from "@/lib/admin-auth";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
-  const key = request.headers.get("x-admin-key");
-  if (!process.env.ADMIN_KEY || key !== process.env.ADMIN_KEY) {
-    return NextResponse.json({ error: "Kunci admin salah" }, { status: 401 });
-  }
+  if (!loginValid(request.headers)) return tolakLogin();
 
   if (!supabaseSiap()) {
     return NextResponse.json({ error: "Supabase belum dikonfigurasi" }, { status: 500 });

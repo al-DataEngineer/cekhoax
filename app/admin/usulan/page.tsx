@@ -38,7 +38,7 @@ export default function KelolaUsulanPage() {
   async function muat() {
     try {
       const res = await fetch("/api/admin/usulan", {
-        headers: headerAdmin(sessionStorage.getItem("ckh_admin_key") ?? ""),
+        headers: headerAdmin(),
       });
       if (!res.ok) {
         setGagal(true);
@@ -69,7 +69,7 @@ export default function KelolaUsulanPage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          ...headerAdmin(sessionStorage.getItem("ckh_admin_key") ?? ""),
+          ...headerAdmin(),
         },
         body: JSON.stringify({ id, keputusan }),
       });

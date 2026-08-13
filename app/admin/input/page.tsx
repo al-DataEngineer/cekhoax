@@ -11,6 +11,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { SUMBER_CEK_FAKTA } from "@/lib/site";
+import { headerAdmin } from "@/lib/admin-key";
 
 const STATUS_FORM = [
   { nilai: "hoax", label: "Hoax" },
@@ -45,7 +46,7 @@ export default function InputManualPage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-admin-key": sessionStorage.getItem("ckh_admin_key") ?? "",
+          ...headerAdmin(),
         },
         body: JSON.stringify({
           judul,

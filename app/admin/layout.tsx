@@ -37,19 +37,21 @@ interface StatUsulan {
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [kunci, setKunci] = useState<string | null>(null);
-  const [inputKunci, setInputKunci] = useState("");
+  const [inputUser, setInputUser] = useState("");
+  const [inputPass, setInputPass] = useState("");
   const [memverif, setMemverif] = useState(false);
   const [gagal, setGagal] = useState(false);
   const [jumlahUsulan, setJumlahUsulan] = useState<number | null>(null);
 
   useEffect(() => {
-    setKunci(ambilKunciAdmin());
+    const sesi = ambilKunciAdmin();
+    setKunci(sesi?.user ?? null);
   }, []);
 
   useEffect(() => {
     if (!kunci) return;
     const muatBadge = () => {
-      fetch("/api/admin/stats", { headers: headerAdmin(kunci) })
+      fetch("/api/admin/stats", { headers: headerAdmin() })
         .then((r) => (r.ok ? r.json() : Promise.reject()))
         .then((d: StatUsulan) => setJumlahUsulan(d.count.usulan ?? 0))
         .catch(() => {
@@ -65,21 +67,22 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   async function masuk(e: React.FormEvent) {
     e.preventDefault();
-    if (!inputKunci || memverif) return;
+    if (!inputUser || !inputPass || memverif) return;
     setMemverif(true);
     setGagal(false);
     try {
-      const res = await fetch("/api/admin/stats", {
-        headers: headerAdmin(inputKunci),
-      });
+      simpanKunciAdmin(inputUser.trim(), inputPass);
+      const res = await fetch("/api/admin/stats", { headers: headerAdmin() });
       if (!res.ok) {
+        hapusKunciAdmin();
         setGagal(true);
         return;
       }
-      simpanKunciAdmin(inputKunci);
-      setKunci(inputKunci);
-      setInputKunci("");
+      setKunci(inputUser.trim());
+      setInputUser("");
+      setInputPass("");
     } catch {
+      hapusKunciAdmin();
       setGagal(true);
     } finally {
       setMemverif(false);
@@ -107,21 +110,31 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </p>
           <form onSubmit={masuk} className="mt-6 space-y-3">
             <input
+              type="text"
+              value={inputUser}
+              onChange={(e) => setInputUser(e.target.value)}
+              placeholder="Username (admin)"
+              autoComplete="username"
+              className="w-full rounded-xl border border-sky-100 bg-sky-50/40 px-4 py-2.5 text-sm text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-sky-300 focus:bg-white focus:ring-4 focus:ring-sky-100"
+              required
+            />
+            <input
               type="password"
-              value={inputKunci}
-              onChange={(e) => setInputKunci(e.target.value)}
-              placeholder="Kunci admin (ADMIN_KEY)"
+              value={inputPass}
+              onChange={(e) => setInputPass(e.target.value)}
+              placeholder="Password (admin123)"
+              autoComplete="current-password"
               className="w-full rounded-xl border border-sky-100 bg-sky-50/40 px-4 py-2.5 text-sm text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-sky-300 focus:bg-white focus:ring-4 focus:ring-sky-100"
               required
             />
             {gagal && (
               <p className="text-left text-xs font-medium text-rose-500">
-                Kunci salah atau layanan tidak merespons.
+                Username atau password salah.
               </p>
             )}
             <button
               type="submit"
-              disabled={memverif || !inputKunci}
+              disabled={memverif || !inputUser || !inputPass}
               className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-sky-200 transition hover:from-sky-600 hover:to-blue-700 disabled:opacity-50"
             >
               {memverif ? (

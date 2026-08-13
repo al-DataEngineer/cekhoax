@@ -81,15 +81,14 @@ export default function DashboardAdmin() {
   const [notif, setNotif] = useState<string | null>(null);
 
   async function muat() {
-    const k = ambilKunciAdmin();
-    if (!k) {
+    if (!ambilKunciAdmin()) {
       setGagal(true);
       setMemuat(false);
       return;
     }
     try {
       const [resStats, resInsight] = await Promise.all([
-        fetch("/api/admin/stats", { headers: headerAdmin(k) }),
+        fetch("/api/admin/stats", { headers: headerAdmin() }),
         fetch("/api/insight"),
       ]);
       if (!resStats.ok) {
@@ -117,7 +116,7 @@ export default function DashboardAdmin() {
     try {
       const res = await fetch("/api/admin/approve", {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...headerAdmin(ambilKunciAdmin()) },
+        headers: { "Content-Type": "application/json", ...headerAdmin() },
         body: JSON.stringify({ id, keputusan }),
       });
       const j = (await res.json()) as { error?: string };

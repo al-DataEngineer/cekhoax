@@ -17,7 +17,7 @@ hasilnya masuk database dan ditampilkan dengan filter interaktif.
 
 ```bash
 npm install
-cp .env.local.example .env.local   # isi: supabase url+key, AI_API_KEY, CRON_SECRET, ADMIN_KEY
+cp .env.local.example .env.local   # isi: supabase url+key, AI_API_KEY, CRON_SECRET
 npm run dev
 ```
 
@@ -53,7 +53,7 @@ GitHub Actions (tiap 10 menit)
 - `/` — dashboard + stats + daftar berita + filter (status, kategori, sumber, pencarian, sortir) + Wawasan AI
 - `/berita/[id]` — detail berita, skor keyakinan AI, alasan analisis, tombol "Tanya AI"
 - `/cek` — cek manual: tempel URL/judul → cocokkan database atau analisis AI on-demand
-- `/admin` — form input manual (butuh `ADMIN_KEY`), untuk berita dari situs cek fakta
+- `/admin` — dashboard admin (login username/password, default `admin`/`admin123`): kelola usulan AI, input manual, kelola berita
 
 ## Fitur AI (di seluruh sistem)
 
@@ -77,9 +77,11 @@ memberi pesan kuota habis, pencarian fallback kata kunci biasa, wawasan pakai st
 | POST | `/api/chat` | – | Asisten chat AI (konteks dari DB) |
 | GET | `/api/insight` | – | Wawasan AI tren hoax (cache 24 jam) |
 | POST | `/api/search` | – | Ubah pertanyaan jadi kata kunci pencarian |
-| POST | `/api/admin` | `x-admin-key: $ADMIN_KEY` | Input berita manual |
-| GET | `/api/admin/usulan` | `x-admin-key: $ADMIN_KEY` | Daftar usulan AI yang menunggu persetujuan |
-| POST | `/api/admin/approve` | `x-admin-key: $ADMIN_KEY` | Setujui (`acc`) atau tolak (`tolak`) usulan AI |
+| POST | `/api/admin` | admin login (`x-admin-user` + `x-admin-password`) | Input berita manual + daftar berita |
+| GET | `/api/admin/usulan` | admin login | Daftar usulan AI yang menunggu persetujuan |
+| POST | `/api/admin/approve` | admin login | Setujui (`acc`) atau tolak (`tolak`) usulan AI |
+| GET | `/api/admin/stats` | admin login | Statistik dashboard (counts, kategori, sumber, aktivitas) |
+| POST | `/api/admin/hapus` | admin login | Hapus berita |
 
 ## Deploy ke Vercel + cron
 

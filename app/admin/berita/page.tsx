@@ -46,7 +46,7 @@ export default function KelolaBeritaPage() {
     if (status) params.set("status", status);
     try {
       const res = await fetch(`/api/admin?${params.toString()}`, {
-        headers: headerAdmin(sessionStorage.getItem("ckh_admin_key") ?? ""),
+        headers: headerAdmin(),
       });
       if (!res.ok) {
         setGagal(true);
@@ -74,7 +74,7 @@ export default function KelolaBeritaPage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          ...headerAdmin(sessionStorage.getItem("ckh_admin_key") ?? ""),
+          ...headerAdmin(),
         },
         body: JSON.stringify({ id }),
       });
