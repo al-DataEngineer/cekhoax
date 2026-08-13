@@ -114,13 +114,13 @@ export default function AnalisisAiPage() {
         setGagal(true);
         return;
       }
-      setData({
+      setData((d) => ({
         konfig: j.konfig,
-        daftar: j.daftar,
-        totalAntrean: j.totalAntrean,
-        stokMencurigakan: j.stokMencurigakan,
-        stokFinal: j.stokFinal,
-      });
+        daftar: j.daftar ?? d?.daftar ?? [],
+        totalAntrean: j.totalAntrean ?? d?.totalAntrean ?? 0,
+        stokMencurigakan: j.stokMencurigakan ?? d?.stokMencurigakan ?? 0,
+        stokFinal: j.stokFinal ?? d?.stokFinal ?? 0,
+      }));
       setGagal(false);
       if (simpan && !jalankan) {
         setToast({ tipe: "sukses", pesan: "Pengaturan analisis disimpan." });
