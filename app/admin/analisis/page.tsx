@@ -162,8 +162,36 @@ export default function AnalisisAiPage() {
 
   useEffect(() => {
     muat();
+    const mulai = () => setMenjalankan(true);
+    const selesaiSinkron = () => setMenjalankan(false);
+    window.addEventListener("cek:mulai", mulai);
+    window.addEventListener("cek:selesai", selesaiSinkron);
+    return () => {
+      window.removeEventListener("cek:mulai", mulai);
+      window.removeEventListener("cek:selesai", selesaiSinkron);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  async function jalankanSekarang() {
+    if (!data || menjalankan) return;
+    window.dispatchEvent(
+      new CustomEvent("cek:jalankan", {
+        detail: {
+          body: {
+            auto: data.konfig.auto,
+            sumber: data.konfig.sumber,
+            mode: data.konfig.mode,
+          },
+        },
+      })
+    );
+    setToast({
+      tipe: "sukses",
+      pesan: "Pemeriksaan dimulai — pantau banner di bawah, tetap berjalan walau pindah menu.",
+    });
+    setTimeout(() => setToast(null), 4500);
+  }
 
   /** Status aktif sumber dihitung langsung dari konfig.sumber (bukan daftar yang bisa basi) */
   const sumberAktif = (nama: string) =>
@@ -436,14 +464,14 @@ export default function AnalisisAiPage() {
             </p>
           </div>
           <button
-            onClick={() => muat(true, { auto: data.konfig.auto, sumber: data.konfig.sumber, mode: data.konfig.mode }, true)}
+            onClick={jalankanSekarang}
             disabled={menjalankan || !Object.values(data.konfig.mode).some(Boolean)}
             className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 px-6 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-200 transition hover:from-emerald-600 hover:to-teal-700 disabled:opacity-50"
           >
             {menjalankan ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Memeriksa.
+                Memeriksa di latar belakang
               </>
             ) : (
               <>

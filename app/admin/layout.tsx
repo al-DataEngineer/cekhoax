@@ -23,6 +23,7 @@ import {
   headerAdmin,
   simpanKunciAdmin,
 } from "@/lib/admin-key";
+import PemantauAnalisis from "./komponen/PemantauAnalisis";
 
 const MENU_ADMIN: Array<{ href: string; label: string; icon: typeof Bell }> = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
@@ -235,6 +236,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
         <main className="min-w-0 flex-1">{children}</main>
       </div>
+      <PemantauAnalisis />
     </div>
   );
 }
