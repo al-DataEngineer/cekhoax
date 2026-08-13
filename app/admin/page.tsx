@@ -7,6 +7,7 @@ import {
   AlertTriangle,
   ArrowRight,
   BarChart3,
+  BrainCircuit,
   CheckCircle2,
   Clock,
   FlaskConical,
@@ -14,6 +15,7 @@ import {
   Loader2,
   Newspaper,
   RefreshCw,
+  ShieldCheck,
   ShieldX,
   Tag,
   XCircle,
@@ -70,6 +72,13 @@ interface StatDashboard {
     proposal: ProposalAi;
     dianalisis_at: string;
   }>;
+  kecerdasan: {
+    diputuskan: number;
+    benar: number;
+    salah: number;
+    presisi: number;
+    denganVerifikasi: number;
+  };
 }
 
 export default function DashboardAdmin() {
@@ -191,6 +200,49 @@ export default function DashboardAdmin() {
           Muat ulang
         </button>
       </header>
+
+      <section className="rounded-3xl border border-violet-100 bg-gradient-to-r from-violet-50/80 to-indigo-50/60 p-5 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="flex items-center gap-2 text-sm font-bold text-slate-700">
+            <BrainCircuit className="h-4 w-4 text-violet-600" />
+            Kecerdasan AI (30 hari)
+          </h2>
+          <span className="text-[11px] text-slate-500">
+            Kesepakatan keputusan AI vs keputusanmu sebagai admin
+          </span>
+        </div>
+        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="flex items-center gap-3 rounded-2xl border border-violet-150 bg-white/80 px-4 py-3">
+            <ShieldCheck className="h-6 w-6 shrink-0 text-emerald-500" />
+            <div>
+              <p className="text-xl font-extrabold text-slate-800">
+                {data.kecerdasan.presisi}%
+              </p>
+              <p className="text-[11px] font-medium text-slate-500">
+                Akurasi ({data.kecerdasan.benar} dari {data.kecerdasan.diputuskan} tepat)
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 rounded-2xl border border-violet-150 bg-white/80 px-4 py-3">
+            <Layers className="h-6 w-6 shrink-0 text-violet-500" />
+            <div>
+              <p className="text-xl font-extrabold text-slate-800">{data.kecerdasan.denganVerifikasi}</p>
+              <p className="text-[11px] font-medium text-slate-500">
+                Usulan lewat verifikasi ganda AI
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 rounded-2xl border border-violet-150 bg-white/80 px-4 py-3">
+            <BarChart3 className="h-6 w-6 shrink-0 text-sky-500" />
+            <div>
+              <p className="text-xl font-extrabold text-slate-800">{data.kecerdasan.salah}</p>
+              <p className="text-[11px] font-medium text-slate-500">
+                Disanggah (AI menyesatkan)
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-6">
         {KARTU_STAT.map((kartu) => {

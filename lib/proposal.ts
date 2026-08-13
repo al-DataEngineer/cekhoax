@@ -5,6 +5,8 @@ export interface ProposalAi {
   confidence: number;
   kategori: string;
   alasan: string[];
+  /** Hasil pas verifikasi ganda (jika sistem menjalankannya) */
+  verifikasi?: { setuju: boolean; confidence?: number; catatan?: string } | null;
 }
 
 export type StatusUsulan = ProposalAi["status_usulan"];
@@ -28,6 +30,14 @@ export function decodeProposal(raw?: string | null): ProposalAi | null {
         kategori:
           typeof p.kategori === "string" ? p.kategori.slice(0, 60) : "Umum",
         alasan: p.alasan.map(String).filter(Boolean).slice(0, 4),
+        verifikasi:
+          typeof p.verifikasi === "object" && p.verifikasi !== null && !Array.isArray(p.verifikasi)
+            ? {
+                setuju: Boolean(p.verifikasi.setuju),
+                confidence: Number(p.verifikasi.confidence) || undefined,
+                catatan: typeof p.verifikasi.catatan === "string" ? p.verifikasi.catatan.slice(0, 300) : undefined,
+              }
+            : undefined,
       };
     }
   } catch {

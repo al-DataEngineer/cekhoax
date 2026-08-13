@@ -10,7 +10,7 @@ import {
   type ModeAnalisis,
 } from "@/lib/konfig";
 import { SUMBER_BERITA } from "@/lib/site";
-import { analisisBerita } from "@/lib/ai";
+import { analisisBerita, buatRingkasan, gabungSkor, verifikasiHasil } from "@/lib/ai";
 import { encodeProposal } from "@/lib/proposal";
 
 export const dynamic = "force-dynamic";
@@ -105,28 +105,46 @@ export async function GET(request: Request) {
   });
 }
 
-function simpanHasilAi(
-  id: string,
-  hasil: { status: "hoax" | "fakta" | "mencurigakan"; confidence: number; kategori: string; alasan: string[] }
+async function simpanHasilAi(
+  item: { id: string; judul: string; ringkasan: string | null; sumber: string },
+  hasil: { status: "hoax" | "fakta" | "mencurigakan"; confidence: number; kategori: string; alasan: string[] },
+  verifikasiGanda: boolean
 ) {
+  const itemId = item.id;
+  let verifikasi: { setuju: boolean; confidence?: number; catatan?: string } | null = null;
+  if (verifikasiGanda) {
+    verifikasi = await verifikasiHasil({
+      judul: item.judul,
+      ringkasan: item.ringkasan ?? undefined,
+      sumber: item.sumber,
+      hasil,
+    });
+  }
+  const skor = gabungSkor(verifikasi?.confidence ?? hasil.confidence, item.sumber);
   return supabase
     .from("berita")
     .update({
       status: "pending",
-      confidence: hasil.confidence,
+      confidence: skor,
       kategori: hasil.kategori,
       alasan: encodeProposal({
         status_usulan: hasil.status,
-        confidence: hasil.confidence,
+        confidence: skor,
         kategori: hasil.kategori,
         alasan: hasil.alasan,
+        verifikasi,
       }),
       dianalisis_at: new Date().toISOString(),
     })
-    .eq("id", id);
+    .eq("id", itemId);
 }
 
-async function analisisAntrean(aktif: string[], maks: number, ketat: boolean): Promise<{ dianalisis: number; gagal: number }> {
+async function analisisAntrean(
+  aktif: string[],
+  maks: number,
+  ketat: boolean,
+  verifikasiGanda: boolean
+): Promise<{ dianalisis: number; gagal: number }> {
   let query = supabase
     .from("berita")
     .select("id, judul, url, sumber, ringkasan")
@@ -153,7 +171,7 @@ async function analisisAntrean(aktif: string[], maks: number, ketat: boolean): P
         sumber: item.sumber,
         ketat,
       });
-      const { error } = await simpanHasilAi(item.id, hasil);
+      const { error } = await simpanHasilAi(item, hasil, verifikasiGanda);
       if (error) throw error;
       laporan.dianalisis++;
     } catch (e) {
@@ -232,7 +250,7 @@ async function cekDuplikat(aktif: string[]) {
 async function cekKelengkapan(aktif: string[]) {
   let query = supabase
     .from("berita")
-    .select("judul, gambar")
+    .select("id, judul, ringkasan, gambar")
     .neq("status", "pending")
     .neq("url", URL_KONFIG)
     .limit(500);
@@ -241,11 +259,29 @@ async function cekKelengkapan(aktif: string[]) {
   }
   const { data: rows } = await query;
 
-  const belumLengkap = ((rows ?? []) as Array<{ judul: string | null; gambar: string | null }>).filter(
-    (r) => !r.judul || r.judul.trim().length < 15 || !r.gambar
-  );
+  const belumLengkap = ((rows ?? []) as Array<{
+    id: string;
+    judul: string | null;
+    ringkasan: string | null;
+    gambar: string | null;
+  }>).filter((r) => !r.judul || r.judul.trim().length < 15 || !r.ringkasan || !r.gambar);
+
+  let dilengkapi = 0;
+  for (const r of belumLengkap.slice(0, 5).filter((x) => !x.ringkasan)) {
+    const ringkas = await buatRingkasan({
+      judul: r.judul ?? "",
+      ringkasan: r.ringkasan ?? undefined,
+      sumber: "",
+    });
+    if (!ringkas) continue;
+    const { error } = await supabase.from("berita").update({ ringkasan: ringkas }).eq("id", r.id);
+    if (!error) dilengkapi++;
+    await tunda(TUNDA_MS);
+  }
+
   return {
     belumLengkap: belumLengkap.length,
+    dilengkapi,
     contoh: belumLengkap.slice(0, 3).map((r) => r.judul ?? "(tanpa judul)"),
   };
 }
@@ -260,6 +296,7 @@ export async function POST(request: Request) {
     auto?: boolean;
     sumber?: string[];
     mode?: Partial<ModeAnalisis>;
+    verifikasiGanda?: boolean;
     jalankan?: boolean;
   };
 
@@ -277,6 +314,8 @@ export async function POST(request: Request) {
           )
         : {}),
     },
+    verifikasiGanda:
+      typeof body.verifikasiGanda === "boolean" ? body.verifikasiGanda : konfigLama.verifikasiGanda,
   };
 
   const errSimpan = await simpanKonfigAnalisis(konfig);
@@ -293,10 +332,15 @@ export async function POST(request: Request) {
     if (konfig.mode.duplikat) laporan.duplikat = await cekDuplikat(aktif);
     if (konfig.mode.kelengkapan) laporan.kelengkapan = await cekKelengkapan(aktif);
     if (konfig.mode.mencurigakan) {
-      laporan.mencurigakan = await analisisAntrean(aktif, MAKS_MENCURIGAKAN, true);
+      laporan.mencurigakan = await analisisAntrean(aktif, MAKS_MENCURIGAKAN, true, konfig.verifikasiGanda);
     }
     if (konfig.mode.pending) {
-      laporan.pending = await analisisAntrean(aktif, konfig.mode.mencurigakan ? 6 : MAKS_PENDING, false);
+      laporan.pending = await analisisAntrean(
+        aktif,
+        konfig.mode.mencurigakan ? 6 : konfig.verifikasiGanda ? 5 : MAKS_PENDING,
+        false,
+        konfig.verifikasiGanda
+      );
     }
   }
 

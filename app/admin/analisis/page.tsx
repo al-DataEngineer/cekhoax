@@ -14,6 +14,7 @@ import {
   Play,
   RefreshCw,
   ShieldAlert,
+  Sparkles,
   XCircle,
 } from "lucide-react";
 import { headerAdmin } from "@/lib/admin-key";
@@ -34,7 +35,7 @@ interface ModeAnalisis {
 }
 
 interface ResponAnalisis {
-  konfig: { auto: boolean; sumber: string[]; mode: ModeAnalisis };
+  konfig: { auto: boolean; sumber: string[]; mode: ModeAnalisis; verifikasiGanda: boolean };
   daftar: SumberAnalisis[];
   totalAntrean: number;
   stokMencurigakan: number;
@@ -182,6 +183,7 @@ export default function AnalisisAiPage() {
             auto: data.konfig.auto,
             sumber: data.konfig.sumber,
             mode: data.konfig.mode,
+            verifikasiGanda: data.konfig.verifikasiGanda,
           },
         },
       })
@@ -232,6 +234,15 @@ export default function AnalisisAiPage() {
       auto: data.konfig.auto,
       sumber: data.konfig.sumber,
       mode: { ...data.konfig.mode, [nama]: nilai },
+    });
+  }
+
+  async function ubahVerifikasiGanda(nilai: boolean) {
+    if (!data) return;
+    await muat(true, {
+      auto: data.konfig.auto,
+      sumber: data.konfig.sumber,
+      verifikasiGanda: nilai,
     });
   }
 
@@ -314,6 +325,41 @@ export default function AnalisisAiPage() {
               className={cn(
                 "absolute top-1 h-6 w-6 rounded-full bg-white shadow transition-all",
                 data.konfig.auto ? "left-7" : "left-1"
+              )}
+            />
+          </button>
+        </div>
+      </section>
+
+      <section className="rounded-3xl border border-fuchsia-100 bg-white/80 p-5 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-fuchsia-400 to-violet-600 text-white shadow-md">
+              <Sparkles className="h-5 w-5" />
+            </span>
+            <div>
+              <h2 className="font-bold text-slate-800">Kecerdasan berlapis</h2>
+              <p className="text-xs text-slate-500">
+                Verifikasi ganda: ahli AI kedua meneliti ulang hasil ahli pertama, lalu semua skor
+                digabung dengan kredibilitas portal berita. Lebih teliti, lebih sedikit analisis
+                salah — dan setiap usulan dicatat siapa yang setuju/keberatan.
+              </p>
+            </div>
+          </div>
+          <button
+            role="switch"
+            aria-checked={data.konfig.verifikasiGanda}
+            onClick={() => ubahVerifikasiGanda(!data.konfig.verifikasiGanda)}
+            disabled={menyimpan}
+            className={cn(
+              "relative h-8 w-14 shrink-0 rounded-full transition-colors disabled:opacity-50",
+              data.konfig.verifikasiGanda ? "bg-fuchsia-500" : "bg-slate-300"
+            )}
+          >
+            <span
+              className={cn(
+                "absolute top-1 h-6 w-6 rounded-full bg-white shadow transition-all",
+                data.konfig.verifikasiGanda ? "left-7" : "left-1"
               )}
             />
           </button>

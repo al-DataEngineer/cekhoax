@@ -154,3 +154,103 @@ export async function analisisBerita(input: {
     alasan,
   };
 }
+
+/** Kredibilitas relatif tiap portal berita (0-100) — dasar skor kepercayaan terpadu */
+export const KREDIBILITAS_SUMBER: Record<string, number> = {
+  "Kompas": 92, "CNBC Indonesia": 90, "CNN Indonesia": 89, "Media Indonesia": 88,
+  "Antara": 93, "Detik": 87, "Kumparan": 84, "IDN Times": 83, "Suara": 82,
+  "Viva": 80, "Okezone": 80, "Tribun News": 78, "Merdeka": 76, "Gatra": 75,
+};
+
+/** Skor kepercayaan terpadu: 75% keyakinan AI + 25% kredibilitas portal */
+export function gabungSkor(aiConfidence: number, sumber: string): number {
+  const kred = KREDIBILITAS_SUMBER[sumber] ?? 75;
+  return Math.round(aiConfidence * 0.75 + kred * 0.25);
+}
+
+export interface HasilVerifikasi {
+  setuju: boolean;
+  confidence: number;
+  catatan: string;
+}
+
+/** Pas verifikasi: AI kedua meneliti ulang hasil klasifikasi pas pertama */
+export async function verifikasiHasil(input: {
+  judul: string;
+  ringkasan?: string;
+  sumber: string;
+  hasil: HasilAi;
+}): Promise<HasilVerifikasi | null> {
+  try {
+    const konten = [
+      `Judul: ${input.judul}`,
+      input.ringkasan ? `Ringkasan: ${input.ringkasan}` : "",
+      `Sumber: ${input.sumber}`,
+      `Hasil klasifikasi awal: ${input.hasil.status} (keyakinan ${input.hasil.confidence})`,
+      `Alasan awal: ${input.hasil.alasan.join("; ")}`,
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    const kontenJson = await panggilPesanAi(
+      [
+        {
+          role: "system",
+          content: `Kamu adalah verifikator independen kedua di tim verifikasi berita Indonesia. Tugasmu meneliti ULANG hasil klasifikasi yang sudah dibuat ahli pertama dan menilai apakah keputusan itu tepat atau keliru. Bersikap skeptis: cari kelemahan logika, kontradiksi, klaim tanpa dasar, dan bias.
+Balas HANYA dengan JSON (tanpa teks lain):
+{
+  "setuju": true/false (apakah kamu setuju dengan keputusan ahli pertama),
+  "confidence": 0-100 (tingkat keyakinanmu pada keputusan yang kamu pilih),
+  "catatan": "1 kalimat singkat mengapa setuju/keberatan"
+}`,
+        },
+        { role: "user", content: konten },
+      ],
+      { json: true, maxTokens: 300, temperature: 0.4 }
+    );
+
+    const parsed = ekstrakJson(kontenJson) as Partial<HasilVerifikasi>;
+    return {
+      setuju: parsed.setuju !== false,
+      confidence: Math.max(0, Math.min(100, Number(parsed.confidence) || input.hasil.confidence)),
+      catatan: typeof parsed.catatan === "string" ? parsed.catatan.slice(0, 300) : "",
+    };
+  } catch (e) {
+    console.warn("Verifikasi ganda gagal (dilewati):", e);
+    return null;
+  }
+}
+
+/** Ringkasan otomatis 2-3 kalimat untuk berita yang datanya kurang lengkap */
+export async function buatRingkasan(input: {
+  judul: string;
+  ringkasan?: string;
+  sumber: string;
+}): Promise<string | null> {
+  try {
+    const konten = [
+      `Judul: ${input.judul}`,
+      input.ringkasan ? `Ringkasan lama: ${input.ringkasan}` : "",
+      `Sumber: ${input.sumber}`,
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    const teks = await panggilPesanAi(
+      [
+        {
+          role: "system",
+          content: `Buat ringkasan berita dalam 2-3 kalimat Bahasa Indonesia yang padat, netral, dan informatif. Balas HANYA dengan teks ringkasan, tanpa judul atau tanda kutip.`,
+        },
+        { role: "user", content: konten },
+      ],
+      { maxTokens: 250, temperature: 0.4 }
+    );
+
+    const bersih = teks.replace(/\s+/g, " ").trim();
+    return bersih.length >= 25 ? bersih.slice(0, 500) : null;
+  } catch (e) {
+    console.warn("Ringkasan otomatis gagal (dilewati):", e);
+    return null;
+  }
+}

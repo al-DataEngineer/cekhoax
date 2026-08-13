@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase, supabaseSiap } from "@/lib/db";
 import { ambilSemuaBeritaRss } from "@/lib/rss";
-import { analisisBerita } from "@/lib/ai";
+import { analisisBerita, gabungSkor, verifikasiHasil } from "@/lib/ai";
 import { MAX_ANALISIS_PER_RUN, SUMBER_BERITA } from "@/lib/site";
 import { encodeProposal } from "@/lib/proposal";
 import { URL_KONFIG, bacaKonfigAnalisis, sumberAktif } from "@/lib/konfig";
@@ -13,6 +13,10 @@ const TUNDA_MS = 1200;
 
 function tunda(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function normJudul(t: string): string {
+  return t.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 80);
 }
 
 export async function GET(request: Request) {
@@ -29,6 +33,7 @@ export async function GET(request: Request) {
     sisaPending: 0,
     autoAnalisis: true,
     telaahUlang: 0,
+    duplikatTersaring: 0,
   };
 
   if (!supabaseSiap()) {
@@ -53,9 +58,30 @@ export async function GET(request: Request) {
       dipublikasi_at: item.dipublikasiAt ? new Date(item.dipublikasiAt).toISOString() : null,
     }));
 
+    const { data: judulLama } = await supabase.from("berita").select("judul").limit(5000);
+    const adaJudul = new Set(
+      ((judulLama ?? []) as Array<{ judul: string | null }>).map((r) => normJudul(r.judul ?? "")).filter(Boolean)
+    );
+    let dibuang = 0;
+    const rowsUnik = rows.filter((r) => {
+      const n = normJudul(r.judul);
+      if (n.length < 20 || adaJudul.has(n)) {
+        dibuang++;
+        return false;
+      }
+      adaJudul.add(n);
+      return true;
+    });
+    laporan.duplikatTersaring = dibuang;
+
+    if (!rowsUnik.length) {
+      laporan.baru = 0;
+      return NextResponse.json(laporan);
+    }
+
     const { data: inserted, error: insertErr } = await supabase
       .from("berita")
-      .upsert(rows, { onConflict: "url", ignoreDuplicates: true })
+      .upsert(rowsUnik, { onConflict: "url", ignoreDuplicates: true })
       .select("id, judul, url, sumber, ringkasan");
 
     if (insertErr) throw insertErr;
@@ -101,17 +127,28 @@ export async function GET(request: Request) {
           ringkasan: item.ringkasan ?? undefined,
           sumber: item.sumber,
         });
+        let verifikasi: { setuju: boolean; confidence?: number; catatan?: string } | null = null;
+        if (konfig.verifikasiGanda) {
+          verifikasi = await verifikasiHasil({
+            judul: item.judul,
+            ringkasan: item.ringkasan ?? undefined,
+            sumber: item.sumber,
+            hasil,
+          });
+        }
+        const skor = gabungSkor(verifikasi?.confidence ?? hasil.confidence, item.sumber);
         const { error } = await supabase
           .from("berita")
           .update({
             status: "pending",
-            confidence: hasil.confidence,
+            confidence: skor,
             kategori: hasil.kategori,
             alasan: encodeProposal({
               status_usulan: hasil.status,
-              confidence: hasil.confidence,
+              confidence: skor,
               kategori: hasil.kategori,
               alasan: hasil.alasan,
+              verifikasi,
             }),
             dianalisis_at: new Date().toISOString(),
           })
@@ -149,17 +186,28 @@ export async function GET(request: Request) {
             sumber: item.sumber,
             ketat: true,
           });
+          let verifikasi: { setuju: boolean; confidence?: number; catatan?: string } | null = null;
+          if (konfig.verifikasiGanda) {
+            verifikasi = await verifikasiHasil({
+              judul: item.judul,
+              ringkasan: item.ringkasan ?? undefined,
+              sumber: item.sumber,
+              hasil,
+            });
+          }
+          const skor = gabungSkor(verifikasi?.confidence ?? hasil.confidence, item.sumber);
           const { error } = await supabase
             .from("berita")
             .update({
               status: "pending",
-              confidence: hasil.confidence,
+              confidence: skor,
               kategori: hasil.kategori,
               alasan: encodeProposal({
                 status_usulan: hasil.status,
-                confidence: hasil.confidence,
+                confidence: skor,
                 kategori: hasil.kategori,
                 alasan: hasil.alasan,
+                verifikasi,
               }),
               dianalisis_at: new Date().toISOString(),
             })

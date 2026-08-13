@@ -23,6 +23,8 @@ export interface KonfigAnalisis {
   sumber: string[];
   /** Jenis pemeriksaan yang dijalankan oleh cron & tombol Jalankan */
   mode: ModeAnalisis;
+  /** Verifikasi ganda: ahli AI kedua meneliti ulang hasil analisis pertama */
+  verifikasiGanda: boolean;
 }
 
 const MODE_BAWAAN: ModeAnalisis = {
@@ -33,7 +35,12 @@ const MODE_BAWAAN: ModeAnalisis = {
   kelengkapan: false,
 };
 
-const KONFIG_BAWAAN: KonfigAnalisis = { auto: true, sumber: [], mode: MODE_BAWAAN };
+const KONFIG_BAWAAN: KonfigAnalisis = {
+  auto: true,
+  sumber: [],
+  mode: MODE_BAWAAN,
+  verifikasiGanda: true,
+};
 
 export async function bacaKonfigAnalisis(): Promise<KonfigAnalisis> {
   try {
@@ -52,6 +59,8 @@ export async function bacaKonfigAnalisis(): Promise<KonfigAnalisis> {
         ...MODE_BAWAAN,
         ...(p.mode && typeof p.mode === "object" ? p.mode : {}),
       },
+      verifikasiGanda:
+        typeof p.verifikasiGanda === "boolean" ? p.verifikasiGanda : KONFIG_BAWAAN.verifikasiGanda,
     };
   } catch {
     return KONFIG_BAWAAN;

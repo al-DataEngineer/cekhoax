@@ -25,6 +25,7 @@ export async function GET(request: Request) {
     kategoriRows,
     sumberRows,
     waktuRows,
+    kecerdasanRows,
   ] = await Promise.all([
     supabase.from("berita").select("*", { count: "exact", head: true }),
     supabase.from("berita").select("*", { count: "exact", head: true }).eq("status", "hoax"),
@@ -57,6 +58,13 @@ export async function GET(request: Request) {
     supabase.from("berita").select("kategori").neq("url", URL_KONFIG).limit(5000),
     supabase.from("berita").select("sumber").neq("url", URL_KONFIG).limit(5000),
     supabase.from("berita").select("created_at").neq("url", URL_KONFIG).limit(5000),
+    supabase
+      .from("berita")
+      .select("status, sumber, alasan, dianalisis_at")
+      .neq("status", "pending")
+      .neq("url", URL_KONFIG)
+      .gte("dianalisis_at", new Date(Date.now() - 30 * 86400000).toISOString())
+      .limit(2000),
   ]);
 
   if (total.error) {
@@ -105,6 +113,21 @@ export async function GET(request: Request) {
     if (olehHari.has(kunci)) olehHari.set(kunci, (olehHari.get(kunci) ?? 0) + 1);
   }
 
+  let benar = 0;
+  let salah = 0;
+  let denganVerifikasi = 0;
+  for (const row of (kecerdasanRows?.data ?? []) as Array<{
+    status: string;
+    alasan: string | null;
+  }>) {
+    const proposal = decodeProposal(row.alasan);
+    if (!proposal) continue;
+    if (proposal.status_usulan === row.status) benar++;
+    else salah++;
+    if (proposal.verifikasi) denganVerifikasi++;
+  }
+  const diputuskan = benar + salah;
+
   return NextResponse.json({
     count: {
       total: total.count ?? 0,
@@ -119,5 +142,12 @@ export async function GET(request: Request) {
     aktivitas: { labels: labelHari, jumlah: [...olehHari.values()] },
     terbaru: terbaru.data ?? [],
     usulan: usulanList,
+    kecerdasan: {
+      diputuskan,
+      benar,
+      salah,
+      presisi: diputuskan ? Math.round((benar / diputuskan) * 100) : 0,
+      denganVerifikasi,
+    },
   });
 }
