@@ -3,23 +3,42 @@
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import {
+  Bell,
   CheckCircle2,
   ExternalLink,
   KeyRound,
   Loader2,
   Lock,
+  RefreshCw,
   ShieldCheck,
   XCircle,
 } from "lucide-react";
 import { SUMBER_CEK_FAKTA } from "@/lib/site";
 import InsightCard from "@/components/InsightCard";
 import type { InsightTren } from "@/lib/insight";
+import type { ProposalAi } from "@/lib/proposal";
 
 const STATUS_FORM = [
   { nilai: "hoax", label: "Hoax" },
   { nilai: "fakta", label: "Fakta" },
   { nilai: "mencurigakan", label: "Mencurigakan" },
 ];
+
+const WARNA_USULAN: Record<string, string> = {
+  hoax: "bg-rose-100 text-rose-700",
+  fakta: "bg-emerald-100 text-emerald-700",
+  mencurigakan: "bg-amber-100 text-amber-700",
+};
+
+interface UsulanItem {
+  id: string;
+  judul: string;
+  url: string;
+  sumber: string;
+  gambar: string | null;
+  proposal: ProposalAi;
+  dianalisis_at: string | null;
+}
 
 type TipeToast = "sukses" | "gagal";
 type Toast = { tipe: TipeToast; pesan: string } | null;
@@ -37,6 +56,8 @@ export default function AdminPage() {
   const [memuat, setMemuat] = useState(false);
   const [toast, setToast] = useState<Toast>(null);
   const [insight, setInsight] = useState<InsightTren | null>(null);
+  const [usulan, setUsulan] = useState<UsulanItem[] | null>(null);
+  const [memprosesId, setMemprosesId] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/insight")
@@ -44,6 +65,57 @@ export default function AdminPage() {
       .then((d) => setInsight(d.insight ?? null))
       .catch(() => setInsight(null));
   }, []);
+
+  useEffect(() => {
+    if (kunci.trim().length < 5) return;
+    const timer = setTimeout(muatUsulan, 400);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kunci]);
+
+  async function muatUsulan() {
+    try {
+      const res = await fetch("/api/admin/usulan", {
+        headers: { "x-admin-key": kunci },
+      });
+      if (!res.ok) return;
+      const data = (await res.json()) as { usulan?: UsulanItem[] };
+      setUsulan(data.usulan ?? []);
+    } catch {
+      setUsulan([]);
+    }
+  }
+
+  async function prosesUsulan(id: string, keputusan: "acc" | "tolak") {
+    if (!kunci || !id || memprosesId) return;
+    setMemprosesId(id);
+    try {
+      const res = await fetch("/api/admin/approve", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-admin-key": kunci,
+        },
+        body: JSON.stringify({ id, keputusan }),
+      });
+      const data = (await res.json()) as { error?: string };
+      if (!res.ok) {
+        tampilkanToast("gagal", data.error ?? "Gagal memproses usulan.");
+        return;
+      }
+      tampilkanToast(
+        "sukses",
+        keputusan === "acc"
+          ? "Usulan disetujui — berita kini tampil di beranda."
+          : "Usulan ditolak."
+      );
+      setUsulan((prev) => (prev ?? []).filter((u) => u.id !== id));
+    } catch {
+      tampilkanToast("gagal", "Terjadi kesalahan jaringan.");
+    } finally {
+      setMemprosesId(null);
+    }
+  }
 
   function tampilkanToast(tipe: TipeToast, pesan: string) {
     setToast({ tipe, pesan });
@@ -115,6 +187,108 @@ export default function AdminPage() {
           database tanpa menunggu cron.
         </p>
       </motion.div>
+
+      <motion.section
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.05 }}
+        className="mt-8 rounded-3xl border border-amber-200 bg-gradient-to-br from-amber-50 to-white p-6 shadow-sm"
+      >
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="flex items-center gap-2 text-lg font-bold text-slate-800">
+            <span className="relative">
+              <Bell className="h-5 w-5 text-amber-500" />
+              {usulan && usulan.length > 0 && (
+                <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold leading-none text-white">
+                  {usulan.length}
+                </span>
+              )}
+            </span>
+            Usulan AI — perlu persetujuan
+          </h2>
+          <button
+            onClick={muatUsulan}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-amber-300 hover:text-amber-600"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${usulan === null ? "animate-spin" : ""}`} />
+            Muat ulang
+          </button>
+        </div>
+
+        {!kunci ? (
+          <p className="mt-3 text-sm text-slate-500">
+            Masukkan kunci admin di form bawah untuk melihat notifikasi hasil analisis AI.
+          </p>
+        ) : usulan === null ? (
+          <p className="mt-3 text-sm text-slate-500">Memuat usulan.</p>
+        ) : usulan.length === 0 ? (
+          <p className="mt-3 text-sm text-slate-500">
+            Belum ada usulan AI. Hasil analisis otomatis akan muncul di sini menunggu
+            persetujuanmu.
+          </p>
+        ) : (
+          <div className="mt-4 space-y-3">
+            {usulan.map((u) => (
+              <div
+                key={u.id}
+                className="rounded-2xl border border-amber-100 bg-white p-4 shadow-sm"
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <span
+                    className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-bold ${WARNA_USULAN[u.proposal.status_usulan] ?? "bg-slate-100 text-slate-600"}`}
+                  >
+                    {u.proposal.status_usulan}
+                  </span>
+                  <span className="text-xs text-slate-500">
+                    Keyakinan {u.proposal.confidence}% · {u.sumber}
+                    {u.proposal.kategori ? ` · ${u.proposal.kategori}` : ""}
+                  </span>
+                </div>
+                <a
+                  href={u.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-2 line-clamp-2 font-semibold text-slate-800 transition hover:text-sky-600"
+                >
+                  {u.judul}
+                </a>
+                {u.proposal.alasan.length > 0 && (
+                  <ul className="mt-2 space-y-1">
+                    {u.proposal.alasan.map((a, i) => (
+                      <li key={i} className="text-[13px] leading-relaxed text-slate-600">
+                        <span className="mr-1.5 text-amber-500">•</span>
+                        {a}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <div className="mt-3 flex gap-2">
+                  <button
+                    onClick={() => prosesUsulan(u.id, "acc")}
+                    disabled={memprosesId === u.id}
+                    className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-emerald-500 px-4 py-2 text-xs font-bold text-white transition hover:bg-emerald-600 disabled:opacity-50"
+                  >
+                    {memprosesId === u.id ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                    )}
+                    Setujui
+                  </button>
+                  <button
+                    onClick={() => prosesUsulan(u.id, "tolak")}
+                    disabled={memprosesId === u.id}
+                    className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 text-xs font-bold text-rose-600 transition hover:bg-rose-100 disabled:opacity-50"
+                  >
+                    <XCircle className="h-3.5 w-3.5" />
+                    Tolak
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </motion.section>
 
       <motion.form
         onSubmit={simpan}

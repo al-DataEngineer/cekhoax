@@ -8,12 +8,11 @@ import EmptyState from "./EmptyState";
 import { cn } from "@/lib/utils";
 import type { Berita, StatusBerita } from "@/lib/types";
 
-const PILIHAN_STATUS: Array<{ nilai: StatusBerita | "semua"; label: string }> = [
+const PILIHAN_STATUS: Array<{ nilai: "semua" | "hoax" | "fakta" | "mencurigakan"; label: string }> = [
   { nilai: "semua", label: "Semua" },
   { nilai: "hoax", label: "Hoax" },
   { nilai: "fakta", label: "Fakta" },
   { nilai: "mencurigakan", label: "Mencurigakan" },
-  { nilai: "pending", label: "Menunggu" },
 ];
 
 const OPSI_SORT = [

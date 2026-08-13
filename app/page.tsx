@@ -34,9 +34,13 @@ export default async function BerandaPage({ searchParams }: BerandaParams) {
           supabase
             .from("berita")
             .select("*")
+            .neq("status", "pending")
             .order("created_at", { ascending: false })
             .limit(400),
-          supabase.from("berita").select("*", { count: "exact", head: true }),
+          supabase
+            .from("berita")
+            .select("*", { count: "exact", head: true })
+            .neq("status", "pending"),
           supabase.from("berita").select("*", { count: "exact", head: true }).eq("status", "hoax"),
           supabase.from("berita").select("*", { count: "exact", head: true }).eq("status", "fakta"),
           supabase

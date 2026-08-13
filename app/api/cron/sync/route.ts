@@ -3,6 +3,7 @@ import { supabase, supabaseSiap } from "@/lib/db";
 import { ambilSemuaBeritaRss } from "@/lib/rss";
 import { analisisBerita } from "@/lib/ai";
 import { MAX_ANALISIS_PER_RUN } from "@/lib/site";
+import { encodeProposal } from "@/lib/proposal";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -73,6 +74,7 @@ export async function GET(request: Request) {
         .from("berita")
         .select("id, judul, url, sumber, ringkasan")
         .eq("status", "pending")
+        .is("alasan", null)
         .order("created_at", { ascending: true })
         .limit(sisaSlot);
       novel = [...novel, ...((pendingLama ?? []) as typeof novel)];
@@ -89,10 +91,15 @@ export async function GET(request: Request) {
         const { error } = await supabase
           .from("berita")
           .update({
-            status: hasil.status,
+            status: "pending",
             confidence: hasil.confidence,
             kategori: hasil.kategori,
-            alasan: JSON.stringify(hasil.alasan),
+            alasan: encodeProposal({
+              status_usulan: hasil.status,
+              confidence: hasil.confidence,
+              kategori: hasil.kategori,
+              alasan: hasil.alasan,
+            }),
             dianalisis_at: new Date().toISOString(),
           })
           .eq("id", item.id);
@@ -111,7 +118,8 @@ export async function GET(request: Request) {
     const { count } = await supabase
       .from("berita")
       .select("*", { count: "exact", head: true })
-      .eq("status", "pending");
+      .eq("status", "pending")
+      .is("alasan", null);
     laporan.sisaPending = count ?? 0;
 
     return NextResponse.json(laporan);

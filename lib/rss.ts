@@ -55,7 +55,9 @@ async function ambilItemSumber(sumber: SumberBerita): Promise<ItemRss[]> {
               ? raw.enclosure.url
               : undefined,
           sumber: sumberItem || sumber.nama,
-          kategori: feed.title?.replace(/rss|feed/i, "").trim() || undefined,
+          kategori: sumber.googleNews
+            ? sumber.nama
+            : feed.title?.replace(/rss|feed/i, "").trim() || undefined,
           dipublikasiAt: raw.isoDate,
         });
       }

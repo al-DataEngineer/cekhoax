@@ -35,12 +35,17 @@ npm run dev
 ```
 GitHub Actions (tiap 10 menit)
   → GET /api/cron/sync (Authorization: Bearer $CRON_SECRET)
-    → fetch RSS CNN Indonesia, CNBC Indonesia, Detik, Kompas, Google News ID
+    → fetch RSS 13 sumber (CNN, CNBC, Kompas, Detik, Tribunnews, Liputan6,
+      Tempo, Sindonews, Okezone, Katadata, IDNTimes, Kumparan via Google News
+      site:<domain>, + Google News umum) — feed resmi yang memblokir server
+      luar negeri otomatis diganti feed Google News per-situs
     → dedupe by URL (upsert onConflict, tidak dobel)
     → insert status "pending"
     → AI analisis berurutan (maks 10 berita/run, tunda 1,2 detik — hindari rate limit)
-    → update database: status, confidence, kategori, alasan
-      → tampil di web + filter
+    → hasil AI disimpan sebagai **usulan** (status tetap pending, proposal di kolom alasan)
+      → notifikasi muncul di /admin (badge "Usulan AI")
+      → admin SETUJUI → status final (hoax/fakta/mencurigakan) → tampil di web
+      → admin TOLAK → kembali ke antrean pending (tidak dianalisis ulang)
 ```
 
 ## Halaman
@@ -73,6 +78,8 @@ memberi pesan kuota habis, pencarian fallback kata kunci biasa, wawasan pakai st
 | GET | `/api/insight` | – | Wawasan AI tren hoax (cache 24 jam) |
 | POST | `/api/search` | – | Ubah pertanyaan jadi kata kunci pencarian |
 | POST | `/api/admin` | `x-admin-key: $ADMIN_KEY` | Input berita manual |
+| GET | `/api/admin/usulan` | `x-admin-key: $ADMIN_KEY` | Daftar usulan AI yang menunggu persetujuan |
+| POST | `/api/admin/approve` | `x-admin-key: $ADMIN_KEY` | Setujui (`acc`) atau tolak (`tolak`) usulan AI |
 
 ## Deploy ke Vercel + cron
 
