@@ -28,6 +28,7 @@ export async function GET(request: Request) {
     gagal: 0,
     sisaPending: 0,
     autoAnalisis: true,
+    telaahUlang: 0,
   };
 
   if (!supabaseSiap()) {
@@ -63,7 +64,7 @@ export async function GET(request: Request) {
 
     const konfig = await bacaKonfigAnalisis();
     const aktif = sumberAktif(konfig, SUMBER_BERITA.map((s) => s.nama));
-    laporan.autoAnalisis = konfig.auto;
+    laporan.autoAnalisis = konfig.auto && konfig.mode.pending !== false;
 
     let novel = (baru as Array<{
       id: string;
@@ -92,7 +93,7 @@ export async function GET(request: Request) {
     }
 
     let counter = 0;
-    const daftarAnalisis = konfig.auto ? novel.slice(0, MAX_ANALISIS_PER_RUN) : [];
+    const daftarAnalisis = laporan.autoAnalisis ? novel.slice(0, MAX_ANALISIS_PER_RUN) : [];
     for (const item of daftarAnalisis) {
       try {
         const hasil = await analisisBerita({
@@ -123,6 +124,52 @@ export async function GET(request: Request) {
       }
       counter++;
       if (counter < daftarAnalisis.length) {
+        await tunda(TUNDA_MS);
+      }
+    }
+
+    laporan.telaahUlang = 0;
+    if (konfig.auto && konfig.mode.mencurigakan) {
+      let q2 = supabase
+        .from("berita")
+        .select("id, judul, url, sumber, ringkasan")
+        .eq("status", "mencurigakan")
+        .neq("url", URL_KONFIG)
+        .order("confidence", { ascending: true })
+        .limit(3);
+      if (aktif.length) {
+        q2 = q2.in("sumber", aktif);
+      }
+      const { data: mencurigakan } = await q2;
+      for (const item of ((mencurigakan ?? []) as typeof novel).slice(0, 3)) {
+        try {
+          const hasil = await analisisBerita({
+            judul: item.judul,
+            ringkasan: item.ringkasan ?? undefined,
+            sumber: item.sumber,
+            ketat: true,
+          });
+          const { error } = await supabase
+            .from("berita")
+            .update({
+              status: "pending",
+              confidence: hasil.confidence,
+              kategori: hasil.kategori,
+              alasan: encodeProposal({
+                status_usulan: hasil.status,
+                confidence: hasil.confidence,
+                kategori: hasil.kategori,
+                alasan: hasil.alasan,
+              }),
+              dianalisis_at: new Date().toISOString(),
+            })
+            .eq("id", item.id);
+          if (error) throw error;
+          laporan.telaahUlang++;
+        } catch (e) {
+          laporan.gagal++;
+          console.error("Gagal telaah ulang:", item.url, e);
+        }
         await tunda(TUNDA_MS);
       }
     }

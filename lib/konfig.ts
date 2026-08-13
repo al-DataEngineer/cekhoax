@@ -3,14 +3,37 @@ import { supabase } from "./db";
 /** Baris konfigurasi khusus di tabel berita (url unik, tidak pernah tampil publik) */
 export const URL_KONFIG = "konfig:analisis";
 
+export interface ModeAnalisis {
+  /** Analisis berita pending (belum pernah dianalisis) */
+  pending: boolean;
+  /** Telaah ulang berita yang masih berstatus mencurigakan (analisis AI lebih ketat) */
+  mencurigakan: boolean;
+  /** Verifikasi tautan sumber: cek URL hidup/mati, tandai yang rusak */
+  tautan: boolean;
+  /** Deteksi kemungkinan duplikat judul */
+  duplikat: boolean;
+  /** Cek kelengkapan data publik (ringkasan & judul kosong pada berita final) */
+  kelengkapan: boolean;
+}
+
 export interface KonfigAnalisis {
   /** Analisis otomatis oleh cron (true = nyala, false = mati) */
   auto: boolean;
   /** Sumber yang diaktifkan; array kosong berarti semua sumber aktif */
   sumber: string[];
+  /** Jenis pemeriksaan yang dijalankan oleh cron & tombol Jalankan */
+  mode: ModeAnalisis;
 }
 
-const KONFIG_BAWAAN: KonfigAnalisis = { auto: true, sumber: [] };
+const MODE_BAWAAN: ModeAnalisis = {
+  pending: true,
+  mencurigakan: false,
+  tautan: false,
+  duplikat: false,
+  kelengkapan: false,
+};
+
+const KONFIG_BAWAAN: KonfigAnalisis = { auto: true, sumber: [], mode: MODE_BAWAAN };
 
 export async function bacaKonfigAnalisis(): Promise<KonfigAnalisis> {
   try {
@@ -25,6 +48,10 @@ export async function bacaKonfigAnalisis(): Promise<KonfigAnalisis> {
     return {
       auto: typeof p.auto === "boolean" ? p.auto : KONFIG_BAWAAN.auto,
       sumber: Array.isArray(p.sumber) ? p.sumber.map(String).filter(Boolean) : [],
+      mode: {
+        ...MODE_BAWAAN,
+        ...(p.mode && typeof p.mode === "object" ? p.mode : {}),
+      },
     };
   } catch {
     return KONFIG_BAWAAN;

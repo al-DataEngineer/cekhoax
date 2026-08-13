@@ -109,6 +109,7 @@ export async function analisisBerita(input: {
   judul: string;
   ringkasan?: string;
   sumber: string;
+  ketat?: boolean;
 }): Promise<HasilAi> {
   const konten = [
     `Judul: ${input.judul}`,
@@ -118,9 +119,13 @@ export async function analisisBerita(input: {
     .filter(Boolean)
     .join("\n");
 
+  const promptSistem = input.ketat
+    ? `${PROMPT_SISTEM}\nBerita ini sebelumnya ditandai "mencurigakan". Lakukan telaah ulang secara lebih ketat: periksa pemutarbalikan fakta, klik-bait ekstrem, kesesuaian isi dengan judul, dan kebenaran klaim. Jangan ragu mengubah status bila bukti mendukung.`
+    : PROMPT_SISTEM;
+
   const kontenJson = await panggilPesanAi(
     [
-      { role: "system", content: PROMPT_SISTEM },
+      { role: "system", content: promptSistem },
       { role: "user", content: konten },
     ],
     { json: true, maxTokens: 700, temperature: 0.2 }

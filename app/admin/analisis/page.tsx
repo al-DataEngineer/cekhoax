@@ -6,9 +6,14 @@ import {
   BrainCircuit,
   CheckCheck,
   CheckCircle2,
+  Files,
+  Hourglass,
+  Link2,
+  ListChecks,
   Loader2,
   Play,
   RefreshCw,
+  ShieldAlert,
   XCircle,
 } from "lucide-react";
 import { headerAdmin } from "@/lib/admin-key";
@@ -20,11 +25,65 @@ interface SumberAnalisis {
   aktif: boolean;
 }
 
+interface ModeAnalisis {
+  pending: boolean;
+  mencurigakan: boolean;
+  tautan: boolean;
+  duplikat: boolean;
+  kelengkapan: boolean;
+}
+
 interface ResponAnalisis {
-  konfig: { auto: boolean; sumber: string[] };
+  konfig: { auto: boolean; sumber: string[]; mode: ModeAnalisis };
   daftar: SumberAnalisis[];
   totalAntrean: number;
+  stokMencurigakan: number;
+  stokFinal: number;
 }
+
+type NamaMode = keyof ModeAnalisis;
+
+interface InfoMode {
+  label: string;
+  deskripsi: string;
+  stok: "antrean" | "mencurigakan" | "final";
+}
+
+const INFO_MODE: Record<NamaMode, InfoMode> = {
+  pending: {
+    label: "Berita pending",
+    deskripsi: "Analisis berita baru yang belum pernah dianalisis menjadi usulan.",
+    stok: "antrean",
+  },
+  mencurigakan: {
+    label: "Telaah ulang mencurigakan",
+    deskripsi: "Analisis ulang secara lebih ketat untuk berita berstatus mencurigakan — hasilnya jadi usulan baru.",
+    stok: "mencurigakan",
+  },
+  tautan: {
+    label: "Verifikasi tautan sumber",
+    deskripsi: "Cek URL asli hidup atau mati; tandai yang rusak agar berita tidak beredar dengan tautan mati.",
+    stok: "final",
+  },
+  duplikat: {
+    label: "Deteksi duplikat judul",
+    deskripsi: "Cari berita serupa yang terbit lebih dari sekali agar halaman tidak menampilkan isi yang sama dua kali.",
+    stok: "final",
+  },
+  kelengkapan: {
+    label: "Kelengkapan data",
+    deskripsi: "Temukan berita yang tampil tanpa ringkasan atau gambar supaya halaman publik selalu rapi dan tepercaya.",
+    stok: "final",
+  },
+};
+
+const IKON_MODE: Record<NamaMode, typeof Hourglass> = {
+  pending: Hourglass,
+  mencurigakan: ShieldAlert,
+  tautan: Link2,
+  duplikat: Files,
+  kelengkapan: ListChecks,
+};
 
 export default function AnalisisAiPage() {
   const [data, setData] = useState<ResponAnalisis | null>(null);
@@ -47,7 +106,10 @@ export default function AnalisisAiPage() {
         },
         body: simpan || jalankan ? JSON.stringify(body) : undefined,
       });
-      const j = (await res.json()) as ResponAnalisis & { error?: string; laporan?: { dianalisis: number; gagal: number } };
+      const j = (await res.json()) as ResponAnalisis & {
+        error?: string;
+        laporan?: Record<string, { dianalisis?: number; gagal?: number; diperiksa?: number; rusak?: number; kelompok?: number; belumLengkap?: number }>;
+      };
       if (!res.ok) {
         setGagal(true);
         return;
@@ -56,6 +118,8 @@ export default function AnalisisAiPage() {
         konfig: j.konfig,
         daftar: j.daftar,
         totalAntrean: j.totalAntrean,
+        stokMencurigakan: j.stokMencurigakan,
+        stokFinal: j.stokFinal,
       });
       setGagal(false);
       if (simpan && !jalankan) {
@@ -63,11 +127,25 @@ export default function AnalisisAiPage() {
         setTimeout(() => setToast(null), 3000);
       }
       if (jalankan) {
-        setToast({
-          tipe: "sukses",
-          pesan: `${j.laporan?.dianalisis ?? 0} dianalisis jadi usulan, ${j.laporan?.gagal ?? 0} gagal.`,
-        });
-        setTimeout(() => setToast(null), 5000);
+        const l = j.laporan ?? {};
+        const ringkas: string[] = [];
+        if (l.pending) {
+          ringkas.push(`Pending: ${l.pending.dianalisis ?? 0} jadi usulan, ${l.pending.gagal ?? 0} gagal`);
+        }
+        if (l.mencurigakan) {
+          ringkas.push(`Telaah ulang: ${l.mencurigakan.dianalisis ?? 0} jadi usulan, ${l.mencurigakan.gagal ?? 0} gagal`);
+        }
+        if (l.tautan) {
+          ringkas.push(`Tautan: ${l.tautan.rusak ?? 0} dari ${l.tautan.diperiksa ?? 0} rusak`);
+        }
+        if (l.duplikat) {
+          ringkas.push(`Duplikat: ${l.duplikat.kelompok ?? 0} kemungkinan`);
+        }
+        if (l.kelengkapan) {
+          ringkas.push(`Data: ${l.kelengkapan.belumLengkap ?? 0} belum lengkap`);
+        }
+        setToast({ tipe: "sukses", pesan: ringkas.length ? ringkas.join(" · ") : "Tidak ada pemeriksaan dijalankan." });
+        setTimeout(() => setToast(null), 6000);
       }
     } catch {
       setToast({
@@ -116,6 +194,23 @@ export default function AnalisisAiPage() {
   async function ceklisSemua() {
     if (!data) return;
     await muat(true, { auto: data.konfig.auto, sumber: [] });
+  }
+
+  async function ubahMode(nama: NamaMode, nilai: boolean) {
+    if (!data) return;
+    await muat(true, {
+      auto: data.konfig.auto,
+      sumber: data.konfig.sumber,
+      mode: { ...data.konfig.mode, [nama]: nilai },
+    });
+  }
+
+  function stokMode(nama: NamaMode): number {
+    if (!data) return 0;
+    const s = INFO_MODE[nama].stok;
+    if (s === "antrean") return data.totalAntrean;
+    if (s === "mencurigakan") return data.stokMencurigakan;
+    return data.stokFinal;
   }
 
   if (memuat) {
@@ -266,33 +361,100 @@ export default function AnalisisAiPage() {
         </div>
       </section>
 
+      <section className="rounded-3xl border border-amber-200 bg-white/80 p-5 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="font-bold text-slate-800">Jenis pemeriksaan</h2>
+            <p className="text-xs text-slate-500">
+              Centang apa yang ingin diperiksa (otomatis oleh cron maupun saat "Jalankan sekarang").
+              Persetujuan tetap di menu Usulan AI.
+            </p>
+          </div>
+          <span className="rounded-full bg-amber-100 px-3 py-1 text-[11px] font-bold text-amber-700">
+            {Object.values(data.konfig.mode).filter(Boolean).length} dari 5 aktif
+          </span>
+        </div>
+
+        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {(Object.keys(INFO_MODE) as NamaMode[]).map((nama) => {
+            const on = data.konfig.mode[nama];
+            const Ikon = IKON_MODE[nama];
+            const stok = stokMode(nama);
+            return (
+              <button
+                key={nama}
+                onClick={() => ubahMode(nama, !on)}
+                disabled={menyimpan}
+                className={cn(
+                  "group flex items-start gap-3 rounded-2xl border px-4 py-3 text-left transition disabled:opacity-50",
+                  on
+                    ? "border-amber-300 bg-amber-50/70"
+                    : "border-slate-100 bg-white hover:border-slate-200"
+                )}
+              >
+                <span
+                  className={cn(
+                    "mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-md border-2 transition",
+                    on ? "border-amber-500 bg-amber-500 text-white" : "border-slate-300 text-transparent"
+                  )}
+                >
+                  <CheckCheck className="h-3.5 w-3.5" />
+                </span>
+                <span className="min-w-0">
+                  <span className="flex items-center gap-1.5 text-sm font-semibold text-slate-700">
+                    <Ikon className={cn("h-4 w-4", on ? "text-amber-600" : "text-slate-400")} />
+                    {INFO_MODE[nama].label}
+                  </span>
+                  <span className="mt-0.5 block text-[11px] leading-snug text-slate-500">
+                    {INFO_MODE[nama].deskripsi}
+                  </span>
+                  <span
+                    className={cn(
+                      "mt-1.5 inline-block rounded-full px-2 py-0.5 text-[10px] font-bold",
+                      stok > 0 ? "bg-slate-100 text-slate-600" : "bg-emerald-50 text-emerald-600"
+                    )}
+                  >
+                    {on ? `${stok} akan diperiksa` : "nonaktif"}
+                  </span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
       <section className="rounded-3xl border border-emerald-200 bg-emerald-50/60 p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="font-bold text-slate-800">Jalankan sekarang</h2>
             <p className="text-xs text-slate-500">
-              Analisis langsung maks. 10 berita dari sumber aktif (tanpa menunggu cron). Hasilnya
-              jadi usulan yang menunggu persetujuanmu.
+              Menjalankan semua jenis pemeriksaan yang dicentang di atas (maks. 10 pending, 5
+              telaah ulang, 15 tautan). Hasil AI jadi usulan yang menunggu persetujuanmu.
             </p>
           </div>
           <button
-            onClick={() => muat(true, { auto: data.konfig.auto, sumber: data.konfig.sumber }, true)}
-            disabled={menjalankan || data.totalAntrean === 0}
+            onClick={() => muat(true, { auto: data.konfig.auto, sumber: data.konfig.sumber, mode: data.konfig.mode }, true)}
+            disabled={menjalankan || !Object.values(data.konfig.mode).some(Boolean)}
             className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 px-6 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-200 transition hover:from-emerald-600 hover:to-teal-700 disabled:opacity-50"
           >
             {menjalankan ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Menganalisis.
+                Memeriksa.
               </>
             ) : (
               <>
                 <Play className="h-4 w-4" />
-                Jalankan AI Sekarang
+                Jalankan Sekarang
               </>
             )}
           </button>
         </div>
+        {!Object.values(data.konfig.mode).some(Boolean) && (
+          <p className="mt-3 rounded-xl bg-white/70 px-3 py-2 text-[11px] font-semibold text-amber-600">
+            Centang minimal satu jenis pemeriksaan di atas untuk bisa menjalankan.
+          </p>
+        )}
       </section>
 
       <AnimatePresence>
