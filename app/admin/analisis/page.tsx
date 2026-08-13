@@ -165,9 +165,11 @@ export default function AnalisisAiPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const semuaAktif = data
-    ? data.daftar.every((s) => s.aktif)
-    : false;
+  /** Status aktif sumber dihitung langsung dari konfig.sumber (bukan daftar yang bisa basi) */
+  const sumberAktif = (nama: string) =>
+    data ? (data.konfig.sumber.length ? data.konfig.sumber.includes(nama) : true) : false;
+
+  const semuaAktif = data ? data.konfig.sumber.length === 0 : false;
 
   async function ubahAuto(nilai: boolean) {
     if (!data) return;
@@ -240,7 +242,7 @@ export default function AnalisisAiPage() {
     );
   }
 
-  const jumlahDipilih = data.daftar.filter((s) => s.aktif).length;
+  const jumlahDipilih = data.daftar.filter((s) => sumberAktif(s.nama)).length;
 
   return (
     <div className="space-y-6">
@@ -323,41 +325,42 @@ export default function AnalisisAiPage() {
         </div>
 
         <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
-          {data.daftar.map((s) => (
-            <div
-              key={s.nama}
-              className={cn(
-                "flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 transition",
-                s.aktif
-                  ? "border-violet-200 bg-violet-50/60"
-                  : "border-slate-100 bg-white"
-              )}
-            >
-              <div className="min-w-0">
-                <p className="truncate text-sm font-semibold text-slate-700">{s.nama}</p>
-                <p className="text-[11px] text-slate-400">
-                  {s.jumlah > 0 ? `${s.jumlah} berita antre` : "tidak ada antrean"}
-                </p>
-              </div>
-              <button
-                role="switch"
-                aria-checked={s.aktif}
-                onClick={() => ubahSumber(s.nama, !s.aktif)}
-                disabled={menyimpan}
+          {data.daftar.map((s) => {
+            const on = sumberAktif(s.nama);
+            return (
+              <div
+                key={s.nama}
                 className={cn(
-                  "relative h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-50",
-                  s.aktif ? "bg-emerald-500" : "bg-slate-300"
+                  "flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 transition",
+                  on ? "border-violet-200 bg-violet-50/60" : "border-slate-100 bg-white"
                 )}
               >
-                <span
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-slate-700">{s.nama}</p>
+                  <p className="text-[11px] text-slate-400">
+                    {s.jumlah > 0 ? `${s.jumlah} berita antre` : "tidak ada antrean"}
+                  </p>
+                </div>
+                <button
+                  role="switch"
+                  aria-checked={on}
+                  onClick={() => ubahSumber(s.nama, !on)}
+                  disabled={menyimpan}
                   className={cn(
-                    "absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all",
-                    s.aktif ? "left-[22px]" : "left-0.5"
+                    "relative h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-50",
+                    on ? "bg-emerald-500" : "bg-slate-300"
                   )}
-                />
-              </button>
-            </div>
-          ))}
+                >
+                  <span
+                    className={cn(
+                      "absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all",
+                      on ? "left-[22px]" : "left-0.5"
+                    )}
+                  />
+                </button>
+              </div>
+            );
+          })}
         </div>
       </section>
 
